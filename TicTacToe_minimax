@@ -2,8 +2,356 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import java.util.Random;
+import java.util.InputMismatchException;
+import java.util.Scanner;
+import java.util.Arrays;
+import java.util.stream.Collectors;
  
-public class HardAI implements Player {
+public class Main {
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        Player[] players = new Player[2];
+ 
+        String command;
+        do {
+            System.out.print("Input command: ");
+            command = scanner.nextLine();
+            String[] arguments = command.split("\\s+");
+ 
+            if ("exit".equals(command)) {
+                break;
+            } else if (arguments.length != 3 || !"start".equals(arguments[0])) {
+                System.out.println("Bad parameters!");
+                continue;
+            }
+ 
+            players[0] = Player.of(arguments[1]);
+            players[1] = Player.of(arguments[2]);
+ 
+            if (players[0] == null || players[1] == null) {
+                System.out.println("Bad parameters!");
+                continue;
+            }
+ 
+            loopGame(players[0], players[1]);
+            System.out.println();
+        } while (true);
+    }
+ 
+    private static void loopGame(Player xPlayer, Player oPlayer) {
+        Field field = new Field();
+ 
+        while (field.continues()) {
+            if (field.nextSymbol() == Symbol.X) {
+                xPlayer.move(field);
+            } else {
+                oPlayer.move(field);
+            }
+        }
+        System.out.println(field);
+        Symbol winner = field.getWinner();
+ 
+        switch (winner) {
+            case X:
+            case O:
+                System.out.println(winner.getSymbol() + " wins");
+                break;
+            case EMPTY:
+                System.out.println("Draw");
+                break;
+            default:
+                throw new IllegalStateException();
+        }
+    }
+}
+ 
+class Field {
+    private Symbol[][] field;
+    private boolean xIsNext;
+    private Symbol winner;
+ 
+    public Field() {
+        xIsNext = true;
+        field = new Symbol[][]{
+                {Symbol.EMPTY, Symbol.EMPTY, Symbol.EMPTY},
+                {Symbol.EMPTY, Symbol.EMPTY, Symbol.EMPTY},
+                {Symbol.EMPTY, Symbol.EMPTY, Symbol.EMPTY}
+        };
+        winner = null;
+    }
+ 
+    boolean isFree(int x, int y) {
+        int column = x - 1;
+        int row = 3 - y;
+ 
+        return field[row][column] == Symbol.EMPTY;
+    }
+ 
+    boolean isFree(Point point) {
+        return isFree(point.getX(), point.getY());
+    }
+ 
+    public void set(Point point) {
+        set(point.getX(), point.getY());
+    }
+ 
+    void set(int x, int y) {
+        if (!isFree(x, y) || winner != null) {
+            throw new IllegalStateException();
+        }
+ 
+        int column = x - 1;
+        int row = 3 - y;
+ 
+        field[row][column] = nextSymbol();
+        xIsNext = !xIsNext;
+ 
+        winner = checkWinner();
+    }
+ 
+    void unset(int x, int y) {
+        if (isFree(x, y)) {
+            throw new IllegalStateException();
+        }
+ 
+        int column = x - 1;
+        int row = 3 - y;
+ 
+        field[row][column] = Symbol.EMPTY;
+        xIsNext = !xIsNext;
+ 
+        winner = checkWinner();
+    }
+ 
+    private Symbol checkWinner() {
+        if (checkRows(Symbol.X) || checkColumns(Symbol.X) || checkDiagonals(Symbol.X)) {
+            return Symbol.X;
+        } else if (checkRows(Symbol.O) || checkColumns(Symbol.O) || checkDiagonals(Symbol.O)) {
+            return Symbol.O;
+        } else if (isFilled()) {
+            return Symbol.EMPTY;
+        }
+        return null;
+    }
+ 
+    boolean willWin(int x, int y, Symbol symbol) {
+        int column = x - 1;
+        int row = 3 - y;
+ 
+        if (isFree(x, y)) {
+            Symbol before = field[row][column];
+            field[row][column] = symbol;
+ 
+            boolean won = checkWinner() == symbol;
+ 
+            field[row][column] = before;
+            return won;
+        }
+        return false;
+    }
+ 
+    Symbol nextSymbol() {
+        return xIsNext ? Symbol.X : Symbol.O;
+    }
+ 
+    private boolean checkRows(Symbol symbol) {
+        for (int i = 0; i < 3; i++) {
+            if (field[i][0] == symbol && field[i][1] == symbol && symbol == field[i][2]) {
+                return true;
+            }
+        }
+        return false;
+    }
+ 
+    private boolean checkColumns(Symbol symbol) {
+        for (int i = 0; i < 3; i++) {
+            if (field[0][i] == symbol && field[1][i] == symbol && field[2][i] == symbol) {
+                return true;
+            }
+        }
+        return false;
+    }
+ 
+    private boolean checkDiagonals(Symbol symbol) {
+        return (field[1][1] == symbol) &&
+                (((field[0][0] == symbol) && (field[2][2] == symbol)) ||
+                        ((field[0][2] == symbol) && (field[2][0] == symbol)));
+    }
+ 
+    private boolean isFilled() {
+        return Arrays.stream(field)
+                .flatMap(Arrays::stream)
+                .noneMatch(symbol -> symbol == Symbol.EMPTY);
+    }
+ 
+    public boolean continues() {
+        return winner == null;
+    }
+ 
+    @Override
+    public String toString() {
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.append("---------")
+                .append(System.lineSeparator());
+ 
+        for (Symbol[] row : field) {
+            String line = Arrays.stream(row).map(Symbol::getSymbol).collect(Collectors.joining(" "));
+ 
+            stringBuilder.append("| ")
+                    .append(line)
+                    .append((" |"))
+                    .append(System.lineSeparator());
+        }
+ 
+        stringBuilder.append("---------");
+        return stringBuilder.toString();
+    }
+ 
+    public Symbol getWinner() {
+        return winner;
+    }
+}
+ 
+class EasyAI implements Player {
+ 
+    @Override
+    public void move(Field field) {
+        System.out.println(field);
+        System.out.println("Making move level \"easy\"");
+ 
+        moveRandomly(field);
+    }
+}
+ 
+class RealPlayer implements Player {
+    @Override
+    public void move(Field field) {
+        Scanner scanner = new Scanner(System.in);
+ 
+        while (true) {
+            System.out.println(field);
+ 
+            System.out.print("Enter coordinates: ");
+            try {
+                int x = scanner.nextInt();
+                int y = scanner.nextInt();
+ 
+                if (x < 1 || x > 3 || y < 1 || y > 3) {
+                    System.out.println("Coordinates should be from 1 to 3!");
+                } else if (field.isFree(x, y)) {
+                    field.set(x, y);
+                    break;
+                } else {
+                    System.out.println("This cell is occupied! Choose another one!");
+                }
+            } catch (InputMismatchException e) {
+                System.out.println("You should enter numbers!");
+            }
+        }
+    }
+}
+
+enum Symbol {
+    X("X") {
+        @Override
+        public Symbol opposite() {
+            return O;
+        }
+    },
+    O("O") {
+        @Override
+        public Symbol opposite() {
+            return X;
+        }
+    },
+    EMPTY(" ") {
+        @Override
+        public Symbol opposite() {
+            return EMPTY;
+        }
+    };
+ 
+    private final String symbol;
+ 
+    Symbol(String symbol) {
+        this.symbol = symbol;
+    }
+ 
+    public String getSymbol() {
+        return symbol;
+    }
+ 
+    public abstract Symbol opposite();
+}
+ 
+interface Player {
+    static Player of(String type) {
+        switch (type) {
+            case "easy":
+                return new EasyAI();
+            case "medium":
+                return new MediumAI();
+            case "hard":
+                return new HardAI();
+            case "user":
+                return new RealPlayer();
+            default:
+                return null;
+        }
+    }
+ 
+    void move(Field field);
+ 
+    default void moveRandomly(Field field) {
+        Random random = new Random();
+        int x, y;
+ 
+        do {
+            x = random.nextInt(3) + 1;
+            y = random.nextInt(3) + 1;
+        } while (!field.isFree(x, y));
+ 
+        field.set(x, y);
+    }
+ 
+    default boolean checkNextTurnWin(Field field, Symbol symbol) {
+        for (int i = 1; i < 4; i++) {
+            for (int j = 1; j < 4; j++) {
+                if (field.willWin(i, j, symbol)) {
+                    field.set(i, j);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+}
+
+class MediumAI implements Player {
+    @Override
+    public void move(Field field) {
+        System.out.println(field);
+        System.out.println("Making move level \"medium\"");
+ 
+        if (tryWin(field)) return;
+        if (tryDefend(field)) return;
+ 
+        moveRandomly(field);
+    }
+ 
+    private boolean tryWin(Field field) {
+        Symbol symbol = field.nextSymbol();
+        return checkNextTurnWin(field, symbol);
+    }
+ 
+    private boolean tryDefend(Field field) {
+        Symbol symbol = field.nextSymbol().opposite();
+        return checkNextTurnWin(field, symbol);
+    }
+}
+ 
+class HardAI implements Player {
     final List<Point> iterationOrder;
  
     public HardAI() {
@@ -68,5 +416,23 @@ public class HardAI implements Player {
             field.unset(x, y);
             return score;
         }
+    }
+}
+
+class Point {
+    private final int x;
+    private final int y;
+ 
+    public Point(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+ 
+    public int getX() {
+        return x;
+    }
+ 
+    public int getY() {
+        return y;
     }
 }
